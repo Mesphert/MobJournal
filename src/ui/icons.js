@@ -1,11 +1,15 @@
 import {
   createElement, List, LayoutDashboard, Clock, Settings, Sun, Moon, Smartphone,
   Globe, ShieldAlert, CalendarDays, Newspaper, Timer, Flame, Inbox,
+  Upload, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight,
+  Coins, Fuel, Bitcoin, DollarSign, ChartLine,
 } from 'lucide';
 
 const ICONS = {
   List, LayoutDashboard, Clock, Settings, Sun, Moon, Smartphone,
   Globe, ShieldAlert, CalendarDays, Newspaper, Timer, Flame, Inbox,
+  Upload, ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight,
+  Coins, Fuel, Bitcoin, DollarSign, ChartLine,
 };
 
 /** Returns an SVG markup string. Usage: icon('Clock', 18) */

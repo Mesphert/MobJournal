@@ -8,6 +8,9 @@ export const SETTING_DEFAULTS = {
   max_loss_per_trade: '50',
   show_saturday: '0',
   show_sunday: '0',
+  broker_time_mode: 'ny_close', // ny_close | fixed
+  broker_utc_offset: '2',       // used when mode = fixed
+  be_threshold: '0.5',          // |net P&L| at or below this = breakeven ($)
 };
 
 export async function loadSettings() {

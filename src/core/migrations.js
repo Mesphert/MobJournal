@@ -120,4 +120,13 @@ CREATE TABLE IF NOT EXISTS news (
 CREATE INDEX IF NOT EXISTS idx_news_ts ON news(ts);
 `,
   },
+  {
+    id: 2,
+    name: 'trades: raw broker times + account',
+    sql: `
+ALTER TABLE trades ADD COLUMN open_raw TEXT;
+ALTER TABLE trades ADD COLUMN close_raw TEXT;
+ALTER TABLE trades ADD COLUMN account TEXT;
+`,
+  },
 ];
