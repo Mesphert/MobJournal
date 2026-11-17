@@ -1,0 +1,29 @@
+{
+  "name": "mobjournal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "sync": "vite build && cap sync android",
+    "android": "vite build && cap sync android && cap open android",
+    "postinstall": "node scripts/copy-wasm.js"
+  },
+  "dependencies": {
+    "@capacitor-community/sqlite": "^7.0.3",
+    "@capacitor/android": "^7.4.0",
+    "@capacitor/core": "^7.4.0",
+    "@capacitor/filesystem": "^7.1.0",
+    "jeep-sqlite": "^2.8.0",
+    "lucide": "^1.74.0",
+    "sql.js": "^1.13.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.17",
+    "vite": "^6.0.0"
+  }
+}

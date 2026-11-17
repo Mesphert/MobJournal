@@ -1,0 +1,9 @@
+{
+  "appId": "com.dawit.mobjournal",
+  "appName": "MobJournal",
+  "webDir": "dist",
+  "android": { "allowMixedContent": false },
+  "plugins": {
+    "CapacitorSQLite": { "androidIsEncryption": false }
+  }
+}
