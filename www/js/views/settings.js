@@ -31,11 +31,20 @@ const toggle = (label, key, s) => `
 
 export async function mount(el, { args = [] } = {}) {
   if (args[0] === 'inputs') return (await import('./inputs.js')).mount(el);
+  if (args[0] === 'journals') return (await import('./journals.js')).mount(el);
 
   const s = appStore.get('settings');
   const sys = systemTimeZone();
 
   el.innerHTML = `
+    <a class="card row between" href="#/settings/journals">
+      <span class="row">
+        ${icon('BookOpen', 20)}
+        <span><span class="bold">Journals</span><br><span class="tiny muted">Trading accounts, MT5 IDs, starting balances</span></span>
+      </span>
+      ${icon('ChevronRight', 18)}
+    </a>
+
     <a class="card row between" href="#/settings/inputs">
       <span class="row">
         ${icon('SlidersHorizontal', 20)}

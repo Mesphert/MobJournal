@@ -29,8 +29,7 @@ export async function mount(el) {
   el.innerHTML = `
     <h3 style="margin-top:0">Sessions</h3>${block(all.filter((r) => r.uid[0] === 's'))}
     ${Object.keys(KIND_LABEL).map((k) => `<h3>${KIND_LABEL[k]}</h3>${block(all.filter((r) => r.kind === k))}`).join('')}
-    <h3>News</h3>
-    <div class="card small muted row">${icon('Newspaper', 16)}No news synced yet.</div>`;
+`;
 
   const rows = new Map([...el.querySelectorAll('[data-uid]')].map((n) => [n.dataset.uid, n]));
   const clock = document.getElementById('clock');

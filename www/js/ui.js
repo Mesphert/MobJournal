@@ -1,4 +1,5 @@
 import { icon } from './icons.js';
+import { appStore } from './store.js';
 
 // ---------- toast ----------
 let timer;
@@ -28,6 +29,7 @@ export const TABS = [
   { id: 'trades', label: 'Trades', icon: 'List' },
   { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
   { id: 'time', label: 'Time', icon: 'Clock' },
+  { id: 'news', label: 'News', icon: 'Newspaper' },
   { id: 'settings', label: 'Settings', icon: 'Settings' },
 ];
 export function renderNav(el, activeId) {
@@ -66,11 +68,18 @@ export function symbolIconName(sym = '') {
 }
 
 // ---------- header ----------
-/** Title bar. back = '#/route' shows a back arrow. actions = html for the right side. */
-export function setHeader({ title = '', back = null, actions = '' } = {}) {
+/**
+ * Title bar. back = '#/route' shows a back arrow. actions = html on the right.
+ * journal = true shows the current journal under the title; tapping it opens the journal switcher.
+ */
+export function setHeader({ title = '', back = null, actions = '', journal = false } = {}) {
+  const acct = appStore.get('account');
   document.getElementById('hdr').innerHTML =
     (back ? `<a class="hdr-back" href="${back}" aria-label="Back">${icon('ArrowLeft', 22)}</a>` : '') +
-    `<h1 class="hdr-title">${esc(title)}</h1><div class="hdr-actions" id="hdr-actions">${actions}</div>`;
+    `<div class="hdr-main"><h1 class="hdr-title">${esc(title)}</h1>` +
+    (journal && acct ? `<button class="hdr-acct" id="hdr-acct" aria-label="Switch journal"><i class="dot"></i><span class="nm">${esc(acct.name)}</span>${icon('ChevronDown', 13)}</button>` : '') +
+    `</div><div class="hdr-actions" id="hdr-actions">${actions}</div>`;
+  document.getElementById('hdr-acct')?.addEventListener('click', () => window.dispatchEvent(new Event('openjournals')));
 }
 export const headerActions = () => document.getElementById('hdr-actions');
 
@@ -94,4 +103,17 @@ export function fmtHold(ms) {
   if (!(ms > 0)) return '—';
   const s = Math.round(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
   return h ? `${h}h ${m}m` : m ? `${m}m ${s % 60}s` : `${s}s`;
+}
+
+// ---------- numbers + flags ----------
+/** 10030.1 -> "10,030.10" */
+export const plain = (n) => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const CURRENCY_COUNTRY = { USD: 'US', EUR: 'EU', GBP: 'GB', JPY: 'JP', AUD: 'AU', CAD: 'CA', CHF: 'CH', NZD: 'NZ', CNY: 'CN', CNH: 'CN', SEK: 'SE', NOK: 'NO', MXN: 'MX', ZAR: 'ZA', INR: 'IN', BRL: 'BR', KRW: 'KR', SGD: 'SG', HKD: 'HK', TRY: 'TR' };
+/** "US" / "USD" -> flag emoji (country or currency codes both work) */
+export function flag(code) {
+  const raw = String(code ?? '').trim().toUpperCase();
+  const c = CURRENCY_COUNTRY[raw] ?? raw;
+  if (!/^[A-Z]{2}$/.test(c)) return '🌐';
+  return String.fromCodePoint(...[...c].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65));
 }

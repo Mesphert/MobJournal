@@ -123,4 +123,21 @@ CREATE TABLE IF NOT EXISTS news (
 CREATE INDEX IF NOT EXISTS idx_news_ts ON news(ts);
 `,
   },
+  {
+    id: 2,
+    name: 'journals (accounts)',
+    sql: `
+CREATE TABLE IF NOT EXISTS accounts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  mt5_id TEXT,
+  starting_balance REAL NOT NULL DEFAULT 0,
+  created_at INTEGER
+);
+ALTER TABLE trades ADD COLUMN account_id INTEGER;
+ALTER TABLE trades ADD COLUMN ticket_raw TEXT;
+UPDATE trades SET ticket_raw = ticket;
+CREATE INDEX IF NOT EXISTS idx_trades_account ON trades(account_id, close_time);
+`,
+  },
 ];

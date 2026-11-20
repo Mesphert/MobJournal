@@ -17,6 +17,7 @@ export const SETTING_DEFAULTS = {
   broker_time_mode: 'ny_close', // ny_close | fixed
   broker_utc_offset: '2',       // used when mode = fixed
   be_threshold: '0.5',          // |net P&L| at or below this = breakeven ($)
+  current_account_id: '',       // selected journal
 };
 
 export async function loadSettings() {
@@ -64,25 +65,76 @@ const toRange = (r) => ({ ...r, days: r.days.split(',').map(Number), enabled: !!
 export const listSessions = async () => (await all('SELECT * FROM sessions WHERE enabled = 1 ORDER BY sort, id')).map(toRange);
 export const listIctRanges = async () => (await all('SELECT * FROM ict_ranges WHERE enabled = 1 ORDER BY sort, id')).map(toRange);
 
+// ---------------- journals (accounts) ----------------
+export async function listAccounts() {
+  return all('SELECT id, name, mt5_id, starting_balance FROM accounts ORDER BY id');
+}
+/** id -> { net, count } for balance display */
+export async function accountStats() {
+  const rows = await all('SELECT account_id, COUNT(*) AS n, COALESCE(SUM(net_pnl), 0) AS net FROM trades GROUP BY account_id');
+  return new Map(rows.map((r) => [r.account_id, { count: r.n, net: r.net }]));
+}
+export async function createAccount({ name, mt5Id = '', startingBalance = 0 }) {
+  const clean = String(name ?? '').trim();
+  if (!clean) throw new Error('Enter a journal name');
+  const mt5 = String(mt5Id ?? '').trim();
+  if (mt5 && (await get('SELECT id FROM accounts WHERE mt5_id = ?', [mt5]))) throw new Error('Another journal already uses that MT5 account ID');
+  await run('INSERT INTO accounts (name, mt5_id, starting_balance, created_at) VALUES (?, ?, ?, ?)',
+    [clean, mt5 || null, Number(startingBalance) || 0, Date.now()]);
+  return (await get('SELECT MAX(id) AS id FROM accounts')).id;
+}
+export async function updateAccount(id, { name, mt5Id = '', startingBalance = 0 }) {
+  const clean = String(name ?? '').trim();
+  if (!clean) throw new Error('Enter a journal name');
+  const mt5 = String(mt5Id ?? '').trim();
+  if (mt5 && (await get('SELECT id FROM accounts WHERE mt5_id = ? AND id != ?', [mt5, id]))) throw new Error('Another journal already uses that MT5 account ID');
+  await run('UPDATE accounts SET name = ?, mt5_id = ?, starting_balance = ? WHERE id = ?', [clean, mt5 || null, Number(startingBalance) || 0, id]);
+}
+/** Screenshot file paths of a journal (so the files can be removed before the rows go). */
+export async function accountShotPaths(id) {
+  return (await all('SELECT s.file_path FROM trade_screenshots s JOIN trades t ON t.id = s.trade_id WHERE t.account_id = ?', [id])).map((r) => r.file_path);
+}
+export async function deleteAccount(id) {
+  await batch([
+    { sql: 'DELETE FROM trades WHERE account_id = ?', params: [id] },   // journal / screenshots / enrichment cascade
+    { sql: 'DELETE FROM accounts WHERE id = ?', params: [id] },
+  ]);
+}
+/** Trades saved before journals existed get adopted into one "Main account" so nothing is lost. */
+export async function adoptLegacyTrades() {
+  if (!(await get('SELECT id FROM trades WHERE account_id IS NULL LIMIT 1'))) return;
+  const mt5 = (await get('SELECT account FROM trades WHERE account IS NOT NULL LIMIT 1'))?.account ?? null;
+  let acc = mt5 ? await get('SELECT id FROM accounts WHERE mt5_id = ?', [mt5]) : null;
+  if (!acc) {
+    await run('INSERT INTO accounts (name, mt5_id, starting_balance, created_at) VALUES (?, ?, 0, ?)', ['Main account', mt5, Date.now()]);
+    acc = await get('SELECT MAX(id) AS id FROM accounts');
+  }
+  await run("UPDATE trades SET account_id = ?, ticket = CAST(? AS INTEGER) || ':' || ticket WHERE account_id IS NULL", [acc.id, acc.id]);
+}
+
 // ---------------- trades ----------------
 const r2 = (n) => Math.round(n * 100) / 100;
 const brokerCfg = (s) => ({ mode: s.broker_time_mode, offsetHours: Number(s.broker_utc_offset) || 0 });
 export const classify = (net, thr) => (net > thr ? 'win' : net < -thr ? 'loss' : 'be');
 
-/** Insert new trades, update existing ones by ticket. Journal data lives in another table, so it is never touched. */
-export async function importTrades(parsed, settings) {
+/**
+ * Insert new trades, update existing ones. `ticket` is stored as "<journal id>:<MT5 ticket>" so the same ticket
+ * number in two journals never collides. Journal notes live in another table and are never touched.
+ */
+export async function importTrades(parsed, settings, accountId) {
   const cfg = brokerCfg(settings);
   const thr = Number(settings.be_threshold) || 0;
-  const have = new Set((await all('SELECT ticket FROM trades')).map((r) => r.ticket));
+  const have = new Set((await all('SELECT ticket FROM trades WHERE account_id = ?', [accountId])).map((r) => r.ticket));
   let added = 0, updated = 0;
   const now = Date.now();
   const COLS = `symbol, side, volume, open_time, close_time, open_raw, close_raw, open_price, close_price,
     sl, tp, commission, swap, profit, net_pnl, result, account`;
-  const insertSql = `INSERT INTO trades (ticket, ${COLS}, source, created_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'mt5-import',?)`;
+  const insertSql = `INSERT INTO trades (ticket, ticket_raw, account_id, ${COLS}, source, created_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'mt5-import',?)`;
   const updateSql = `UPDATE trades SET ${COLS.split(',').map((c) => c.trim() + ' = ?').join(', ')} WHERE ticket = ?`;
   const seen = new Set(have);
   const statements = parsed.trades.map((t) => {
+    const key = `${accountId}:${t.ticket}`;
     const net = r2(t.profit + t.commission + t.swap);
     const f = [
       t.symbol, t.side, t.volume,
@@ -90,15 +142,15 @@ export async function importTrades(parsed, settings) {
       t.openPrice, t.closePrice, t.sl, t.tp, t.commission, t.swap, t.profit, net,
       classify(net, thr), parsed.account,
     ];
-    if (seen.has(t.ticket)) { updated++; return { sql: updateSql, params: [...f, t.ticket] }; }
-    seen.add(t.ticket); added++;
-    return { sql: insertSql, params: [t.ticket, ...f, now] };
+    if (seen.has(key)) { updated++; return { sql: updateSql, params: [...f, key] }; }
+    seen.add(key); added++;
+    return { sql: insertSql, params: [key, t.ticket, accountId, ...f, now] };
   });
   await batch(statements);
   return { added, updated, total: statements.length };
 }
 
-/** Re-derive UTC times and win/loss/be after broker-time or breakeven settings change. */
+/** Re-derive UTC times and win/loss/be after broker-time or breakeven settings change (all journals). */
 export async function recomputeDerived(settings) {
   const cfg = brokerCfg(settings);
   const thr = Number(settings.be_threshold) || 0;
@@ -109,16 +161,25 @@ export async function recomputeDerived(settings) {
   })));
 }
 
-export const countTrades = async () => (await get('SELECT COUNT(*) AS n FROM trades')).n;
+export const countTrades = async (accountId) => (await get('SELECT COUNT(*) AS n FROM trades WHERE account_id = ?', [accountId])).n;
 
-export function listTrades({ limit = 20, offset = 0 } = {}) {
+export function listTrades({ accountId, limit = 20, offset = 0 } = {}) {
   const lim = Math.max(1, Math.floor(Number(limit)) || 20);   // inlined: the native layer binds params as text
   const off = Math.max(0, Math.floor(Number(offset)) || 0);
   return all(`SELECT t.id, t.symbol, t.side, t.volume, t.open_time, t.close_time, t.net_pnl, t.result, j.quality
               FROM trades t LEFT JOIN trade_journal j ON j.trade_id = t.id
-              ORDER BY t.open_time DESC, t.id DESC LIMIT ${lim} OFFSET ${off}`);
+              WHERE t.account_id = ?
+              ORDER BY t.open_time DESC, t.id DESC LIMIT ${lim} OFFSET ${off}`, [accountId]);
 }
 export const getTrade = (id) => get('SELECT * FROM trades WHERE id = ?', [id]);
+
+/** Lightweight rows for dashboard maths (one journal). */
+export const tradesForStats = (accountId) =>
+  all('SELECT id, symbol, side, open_time, close_time, net_pnl, result FROM trades WHERE account_id = ?', [accountId]);
+
+// ---------------- news (filled by the news sync later) ----------------
+export const listNews = (fromTs, toTs) =>
+  all('SELECT id, ts, country, title, impact, forecast, actual, previous FROM news WHERE ts >= ? AND ts < ? ORDER BY ts', [fromTs, toTs]);
 
 // ---------------- timeframes + trade input values ----------------
 export async function listTfs() {

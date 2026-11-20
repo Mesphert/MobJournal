@@ -44,3 +44,8 @@ export async function removeShot(row) {
   try { await FS().deleteFile({ path: row.file_path, directory: 'DATA' }); } catch (e) { console.warn(e); }
   await deleteShotRow(row.id);
 }
+
+/** Remove a stored file by path (used when a whole journal is deleted). */
+export async function removeShotFile(path) {
+  await FS().deleteFile({ path, directory: 'DATA' });
+}

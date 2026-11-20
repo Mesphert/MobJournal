@@ -62,30 +62,30 @@ export async function mountDetail(el, id) {
   const stat = (k, v) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`;
   const num = (v) => (v == null ? '—' : v);
   const summary = `
-    <div class="card">
+    <div class="card res-${cls}">
       <div class="row">
-        <div class="icon-box">${icon(symbolIconName(trade.symbol), 20)}</div>
+        <div class="icon-box">${icon(symbolIconName(trade.symbol), 18)}</div>
         <div class="grow">
-          <div class="row" style="gap:8px">
-            <span class="bold">${esc(trade.symbol)}</span>
+          <div class="bold" style="font-size:15px">${esc(trade.symbol)}</div>
+          <div class="row wrap" style="gap:5px;margin-top:5px">
             <span class="chip ${buy ? 'win' : 'loss'}">${icon(buy ? 'ArrowUpRight' : 'ArrowDownRight', 12)}${buy ? 'Buy' : 'Sell'}</span>
+            <span class="chip">${num(trade.volume)} lots</span>
+            <span class="chip">${icon('Timer', 11)}${fmtHold(trade.close_time - trade.open_time)}</span>
+            ${j.quality ? `<span class="chip info">${icon('Star', 11)}${esc(j.quality)}</span>` : ''}
           </div>
-          <div class="tiny muted" style="margin-top:2px">${num(trade.volume)} lots</div>
         </div>
         <div class="right">
-          <div class="bold ${cls}" style="font-size:18px">${money(trade.net_pnl)}</div>
-          <div class="tiny bold ${cls}">${label}</div>
+          <div class="bold ${cls}" style="font-size:18px;margin-bottom:5px">${money(trade.net_pnl)}</div>
+          <span class="chip ${cls}"><i class="dot"></i>${label}</span>
         </div>
       </div>
-      <div class="grid2" style="margin-top:16px">
+      <div class="grid2" style="margin-top:12px">
         ${stat('Opened', tradeDate(trade.open_time, tz))}
         ${stat('Closed', tradeDate(trade.close_time, tz))}
         ${stat('Entry', num(trade.open_price))}
         ${stat('Exit', num(trade.close_price))}
-        ${stat('Hold', fmtHold(trade.close_time - trade.open_time))}
         ${stat('Stop / Target', `${num(trade.sl)} / ${num(trade.tp)}`)}
-        ${stat('Commission', money(trade.commission))}
-        ${stat('Swap', money(trade.swap))}
+        ${stat('Commission / Swap', `${money(trade.commission)} / ${money(trade.swap)}`)}
       </div>
     </div>`;
 
@@ -199,7 +199,7 @@ export async function mountDetail(el, id) {
     const viewer = document.createElement('div');
     viewer.className = 'viewer';
     viewer.innerHTML = `
-      <div class="bar"><span class="bold">${esc(row.tf)}</span>
+      <div class="bar2"><span class="bold">${esc(row.tf)}</span>
         <span class="row"><button class="iconbtn" data-del style="color:#fff">${icon('Trash2', 22)}</button>
         <button class="iconbtn" data-close style="color:#fff">${icon('X', 24)}</button></span></div>
       <img alt="">`;

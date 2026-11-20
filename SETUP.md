@@ -19,6 +19,9 @@ GitHub Actions creates the Android project, adds the native SQLite plugin (+ the
 The signing key is fixed, so each new APK installs over the old one and keeps your data.
 (Uninstall builds from before this layout once; they were signed with different keys.)
 
+## Journals
+Each trading account is a journal (name, optional MT5 account ID, starting balance). Switch from the header on Trades and Dashboard; manage in Settings > Journals. Importing a report sends it to the journal whose MT5 ID matches.
+
 ## Import
 MT5 desktop > History tab > right-click > Report > HTML. Pick that file with Import.
 Re-importing is safe: trades are matched by ticket.
