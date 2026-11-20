@@ -1,6 +1,7 @@
 import { all, get, run, batch } from './db.js';
 import { brokerToUtc } from './broker-time.js';
 import { SESSION_SEEDS, ICT_SEEDS } from './seeds.js';
+import { TF_ORDER, DISCIPLINE_BREACH } from './input-builder.js';
 
 const TFS = ['1m', '2m', '3m', '5m', '15m', '30m', '1H', '4H', '1D', '1W', '1M'];
 
@@ -45,6 +46,17 @@ export async function seedDefaults() {
   }));
   TFS.forEach((tf, i) => haveT.has(tf) || st.push({ sql: 'INSERT INTO tf_enabled (tf, enabled, sort) VALUES (?,1,?)', params: [tf, i] }));
   await batch(st);
+
+  // Starter input values (from your examples) are seeded once, so values you delete never come back.
+  if (!(await get("SELECT value FROM settings WHERE key = 'seed_inputs_v1'"))) {
+    const names = {
+      poi: ['OB', 'FVG'], setup_model: ['CRT'], entry_model: ['Unicorn', 'CISD', 'OTE'], target: ['BSL', 'SSL'],
+      quality: ['A+', 'A', 'B+', 'B', 'C'], discipline: [DISCIPLINE_BREACH, 'Followed plan'],
+    };
+    await batch(Object.entries(names).flatMap(([cat, list]) =>
+      list.map((n) => ({ sql: 'INSERT OR IGNORE INTO input_values (category, name, tfs) VALUES (?, ?, NULL)', params: [cat, n] }))));
+    await saveSetting('seed_inputs_v1', '1');
+  }
 }
 
 // ---------------- sessions / ICT ranges ----------------
@@ -102,6 +114,66 @@ export const countTrades = async () => (await get('SELECT COUNT(*) AS n FROM tra
 export function listTrades({ limit = 20, offset = 0 } = {}) {
   const lim = Math.max(1, Math.floor(Number(limit)) || 20);   // inlined: the native layer binds params as text
   const off = Math.max(0, Math.floor(Number(offset)) || 0);
-  return all(`SELECT id, symbol, side, volume, open_time, close_time, net_pnl, result
-              FROM trades ORDER BY open_time DESC, id DESC LIMIT ${lim} OFFSET ${off}`);
+  return all(`SELECT t.id, t.symbol, t.side, t.volume, t.open_time, t.close_time, t.net_pnl, t.result, j.quality
+              FROM trades t LEFT JOIN trade_journal j ON j.trade_id = t.id
+              ORDER BY t.open_time DESC, t.id DESC LIMIT ${lim} OFFSET ${off}`);
 }
+export const getTrade = (id) => get('SELECT * FROM trades WHERE id = ?', [id]);
+
+// ---------------- timeframes + trade input values ----------------
+export async function listTfs() {
+  const map = new Map((await all('SELECT tf, enabled FROM tf_enabled')).map((r) => [r.tf, !!r.enabled]));
+  return TF_ORDER.map((tf) => ({ tf, enabled: map.get(tf) ?? true }));
+}
+export const setTfEnabled = (tf, on) => batch([
+  { sql: 'INSERT OR IGNORE INTO tf_enabled (tf, enabled, sort) VALUES (?, ?, ?)', params: [tf, on ? 1 : 0, TF_ORDER.indexOf(tf)] },
+  { sql: 'UPDATE tf_enabled SET enabled = ? WHERE tf = ?', params: [on ? 1 : 0, tf] },
+]);
+
+export async function listValues(category) {
+  return (await all('SELECT id, name, tfs FROM input_values WHERE category = ? ORDER BY id', [category]))
+    .map((r) => ({ id: r.id, name: r.name, tfs: r.tfs ? JSON.parse(r.tfs) : null }));
+}
+/** tfs: array of timeframes, or null = all enabled timeframes */
+export async function addValue(category, name, tfs = null) {
+  const clean = name.trim();
+  if (!clean) throw new Error('Enter a name');
+  if (await get('SELECT id FROM input_values WHERE category = ? AND name = ? COLLATE NOCASE', [category, clean])) {
+    throw new Error(`"${clean}" already exists`);
+  }
+  await run('INSERT INTO input_values (category, name, tfs) VALUES (?, ?, ?)', [category, clean, tfs ? JSON.stringify(tfs) : null]);
+}
+export async function updateValue(id, name, tfs = null) {
+  const clean = name.trim();
+  if (!clean) throw new Error('Enter a name');
+  await run('UPDATE input_values SET name = ?, tfs = ? WHERE id = ?', [clean, tfs ? JSON.stringify(tfs) : null, id]);
+}
+export const deleteValue = (id) => run('DELETE FROM input_values WHERE id = ?', [id]);
+
+export async function loadInputState(categories) {
+  const enabledTfs = (await listTfs()).filter((t) => t.enabled).map((t) => t.tf);
+  const values = {};
+  for (const c of categories) values[c] = await listValues(c);
+  return { enabledTfs, values };
+}
+
+// ---------------- journal ----------------
+const JOURNAL_FIELDS = ['direction', 'bias', 'trade_type', 'poi', 'setup_model', 'setup_pd',
+  'entry_model', 'entry_pd', 'target', 'quality', 'discipline', 'mood', 'notes'];
+export async function getJournal(tradeId) {
+  return (await get('SELECT * FROM trade_journal WHERE trade_id = ?', [tradeId])) ?? {};
+}
+export async function saveJournalField(tradeId, field, value) {
+  if (!JOURNAL_FIELDS.includes(field)) throw new Error(`Unknown field ${field}`);
+  await batch([
+    { sql: 'INSERT OR IGNORE INTO trade_journal (trade_id) VALUES (?)', params: [tradeId] },
+    { sql: `UPDATE trade_journal SET ${field} = ?, updated_at = ? WHERE trade_id = ?`, params: [value === '' ? null : value, Date.now(), tradeId] },
+  ]);
+}
+
+// ---------------- screenshots (rows only; files live in app storage) ----------------
+export const listShots = (tradeId) => all('SELECT id, tf, file_path FROM trade_screenshots WHERE trade_id = ? ORDER BY id', [tradeId]);
+export const addShotRow = (tradeId, tf, path) =>
+  run('INSERT INTO trade_screenshots (trade_id, tf, file_path, created_at) VALUES (?, ?, ?, ?)', [tradeId, tf, path, Date.now()]);
+export const getShot = (id) => get('SELECT id, tf, file_path FROM trade_screenshots WHERE id = ?', [id]);
+export const deleteShotRow = (id) => run('DELETE FROM trade_screenshots WHERE id = ?', [id]);

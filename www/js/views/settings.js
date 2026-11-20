@@ -20,7 +20,7 @@ function zones() {
 const num = (label, key, s, hint = '') => `
   <label class="label">${label}
     <input class="field" type="number" step="any" inputmode="decimal" data-num="${key}" value="${esc(s[key])}">
-    ${hint ? `<span class="tiny muted">${hint}</span>` : ''}
+    ${hint ? `<span class="hint">${hint}</span>` : ''}
   </label>`;
 
 const toggle = (label, key, s) => `
@@ -29,12 +29,20 @@ const toggle = (label, key, s) => `
     <input type="checkbox" class="check" data-bool="${key}" ${s[key] === '1' ? 'checked' : ''}>
   </label>`;
 
-export function mount(el) {
+export async function mount(el, { args = [] } = {}) {
+  if (args[0] === 'inputs') return (await import('./inputs.js')).mount(el);
+
   const s = appStore.get('settings');
   const sys = systemTimeZone();
 
   el.innerHTML = `
-    <h1 style="margin-bottom:16px">Settings</h1>
+    <a class="card row between" href="#/settings/inputs">
+      <span class="row">
+        ${icon('SlidersHorizontal', 20)}
+        <span><span class="bold">Trade inputs</span><br><span class="tiny muted">Timeframes, POI, models, targets, quality, discipline</span></span>
+      </span>
+      ${icon('ChevronRight', 18)}
+    </a>
 
     <section class="card">
       <h2>${icon('Sun', 18)}Theme</h2>
@@ -53,12 +61,12 @@ export function mount(el) {
 
     <section class="card stack">
       <h2 style="margin-bottom:0">${icon('Clock', 18)}MT5 server time</h2>
-      <select class="field" id="brokerMode" style="margin-top:0">
+      <select class="field" id="brokerMode">
         <option value="ny_close" ${s.broker_time_mode === 'ny_close' ? 'selected' : ''}>New York close (GMT+2 winter / GMT+3 summer)</option>
         <option value="fixed" ${s.broker_time_mode === 'fixed' ? 'selected' : ''}>Fixed UTC offset (no DST)</option>
       </select>
       <div id="offsetWrap" class="${s.broker_time_mode === 'fixed' ? '' : 'hide'}">${num('UTC offset (hours)', 'broker_utc_offset', s)}</div>
-      <p class="tiny muted" style="margin:0">Converts the report's times to real time. Changing it re-calculates all trades.</p>
+      <span class="hint">Converts the report's times to real time. Changing it re-calculates all trades.</span>
     </section>
 
     <section class="card stack">
@@ -73,7 +81,7 @@ export function mount(el) {
       <h2 style="margin-bottom:4px">${icon('CalendarDays', 18)}Weekly table</h2>
       ${toggle('Always show Saturday', 'show_saturday', s)}
       ${toggle('Always show Sunday', 'show_sunday', s)}
-      <p class="tiny muted" style="margin:0">Weekend columns also appear automatically when a trade exists on those days.</p>
+      <span class="hint">Weekend columns also appear automatically when a trade exists on those days.</span>
     </section>`;
 
   const update = async (key, value) => {

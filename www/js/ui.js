@@ -64,3 +64,34 @@ export function symbolIconName(sym = '') {
   if (/^[A-Z]{6}$/.test(s)) return 'DollarSign';
   return 'ChartLine';
 }
+
+// ---------- header ----------
+/** Title bar. back = '#/route' shows a back arrow. actions = html for the right side. */
+export function setHeader({ title = '', back = null, actions = '' } = {}) {
+  document.getElementById('hdr').innerHTML =
+    (back ? `<a class="hdr-back" href="${back}" aria-label="Back">${icon('ArrowLeft', 22)}</a>` : '') +
+    `<h1 class="hdr-title">${esc(title)}</h1><div class="hdr-actions" id="hdr-actions">${actions}</div>`;
+}
+export const headerActions = () => document.getElementById('hdr-actions');
+
+// ---------- bottom sheet ----------
+export function openSheet(html) {
+  const bg = document.createElement('div');
+  bg.className = 'sheet-bg';
+  bg.innerHTML = `<div class="sheet">${html}</div>`;
+  const close = () => bg.remove();
+  bg.addEventListener('click', (e) => { if (e.target === bg) close(); });
+  document.body.appendChild(bg);
+  return { el: bg.firstChild, close };
+}
+
+// ---------- stars (1-5, tap the same star again to clear) ----------
+export const starsHtml = (value) => `<div class="stars" id="stars">${[1, 2, 3, 4, 5].map((n) =>
+  `<button type="button" data-star="${n}" class="${n <= (Number(value) || 0) ? 'on' : ''}" aria-label="${n} star">${icon('Star', 26)}</button>`).join('')}</div>`;
+
+/** 4380000 -> "1h 13m" */
+export function fmtHold(ms) {
+  if (!(ms > 0)) return '—';
+  const s = Math.round(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h ? `${h}h ${m}m` : m ? `${m}m ${s % 60}s` : `${s}s`;
+}

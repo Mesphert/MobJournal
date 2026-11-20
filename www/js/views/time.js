@@ -3,7 +3,7 @@ import { rangeState } from '../schedule.js';
 import { formatDuration, formatInTz } from '../time.js';
 import { appStore } from '../store.js';
 import { icon } from '../icons.js';
-import { esc } from '../ui.js';
+import { esc, setHeader } from '../ui.js';
 
 const KIND_LABEL = { killzone: 'Killzones', silver_bullet: 'Silver Bullets', macro: 'Macros' };
 
@@ -25,17 +25,15 @@ export async function mount(el) {
     `<div class="row between" style="padding:10px 0" data-uid="${r.uid}"></div>`).join('')}</div>`;
 
   // Static structure is built once; each tick only updates the rows, so scrolling is never disturbed.
+  setHeader({ title: 'Time', actions: '<span class="chip" id="clock"></span>' });
   el.innerHTML = `
-    <div class="row between" style="margin-bottom:12px">
-      <h1>Time</h1><span class="chip" id="clock"></span>
-    </div>
     <h3 style="margin-top:0">Sessions</h3>${block(all.filter((r) => r.uid[0] === 's'))}
     ${Object.keys(KIND_LABEL).map((k) => `<h3>${KIND_LABEL[k]}</h3>${block(all.filter((r) => r.kind === k))}`).join('')}
     <h3>News</h3>
     <div class="card small muted row">${icon('Newspaper', 16)}No news synced yet.</div>`;
 
   const rows = new Map([...el.querySelectorAll('[data-uid]')].map((n) => [n.dataset.uid, n]));
-  const clock = el.querySelector('#clock');
+  const clock = document.getElementById('clock');
 
   const tick = () => {
     const now = Date.now();

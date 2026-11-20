@@ -2,7 +2,7 @@ import { openDb } from './db.js';
 import { appStore } from './store.js';
 import { systemTimeZone } from './time.js';
 import { seedDefaults, loadSettings } from './data.js';
-import { applyTheme, watchSystemTheme, renderNav } from './ui.js';
+import { applyTheme, watchSystemTheme, renderNav, setHeader } from './ui.js';
 
 // Each view exports mount(el, { args }) -> optional cleanup fn
 const ROUTES = {
@@ -12,6 +12,7 @@ const ROUTES = {
   settings: () => import('./views/settings.js'),
 };
 const DEFAULT = 'trades';
+const TITLES = { trades: 'Trades', dashboard: 'Dashboard', time: 'Time', settings: 'Settings' };
 let cleanup = null;
 let token = 0;
 
@@ -23,8 +24,11 @@ function parse() {
 async function render() {
   const my = ++token;
   const { tab, args } = parse();
-  const view = document.getElementById('view');
+  const old = document.getElementById('view');
+  const view = old.cloneNode(false);   // fresh container: no listeners left over from the previous screen
+  old.replaceWith(view);
   renderNav(document.getElementById('nav'), tab);
+  setHeader({ title: TITLES[tab] });          // views may override (back arrow, actions)
   if (cleanup) { try { cleanup(); } catch (e) { console.error(e); } cleanup = null; }
   const mod = await ROUTES[tab]();
   if (my !== token) return;            // a newer navigation won

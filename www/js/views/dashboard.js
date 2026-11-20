@@ -2,7 +2,6 @@ const TABS = ['Overview', 'Weekly', 'Risk', 'Timing', 'Instruments'];
 
 export function mount(el) {
   el.innerHTML = `
-    <h1 style="margin-bottom:12px">Dashboard</h1>
     <div class="seg" id="dtabs" style="margin-bottom:16px">
       ${TABS.map((t, i) => `<button data-i="${i}" class="${i === 0 ? 'on' : ''}">${t}</button>`).join('')}
     </div>

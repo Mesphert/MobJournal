@@ -1,7 +1,7 @@
 # MobJournal
 
 Vanilla JS Capacitor app. No bundler, no framework, no npm packages in the repo.
-GitHub Actions creates the Android project, adds the native SQLite plugin and builds the APK.
+GitHub Actions creates the Android project, adds the native SQLite plugin (+ the official Filesystem plugin for screenshots) and builds the APK.
 
 ## Layout
 - `www/` the whole app (plain ES modules + one CSS file)
