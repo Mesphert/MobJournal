@@ -1,9 +1,7 @@
 import { appStore } from '../store.js';
-import { importTrades, countTrades, listTrades, updateAccount } from '../data.js';
-import { decodeReport, parseReport } from '../mt5-parser.js';
-import { refreshAccounts, selectAccount } from '../accounts.js';
+import { countTrades, listTrades } from '../data.js';
 import { icon } from '../icons.js';
-import { money, tradeDate, symbolIconName, toast, esc, setHeader, headerActions, fmtHold } from '../ui.js';
+import { money, tradeDate, symbolIconName, esc, setHeader, fmtHold } from '../ui.js';
 
 const PAGE_SIZE = 20;
 const RESULT = { win: ['WIN', 'win'], loss: ['LOSS', 'loss'], be: ['BE', 'be'] };
@@ -33,14 +31,10 @@ function tradeRow(t, tz) {
 }
 
 export async function mount(el, { args = [] } = {}) {
+  if (args[0] && args[1] === 'edit') return (await import('./trade-edit.js')).mountEdit(el, Number(args[0]));
   if (args[0]) return (await import('./trade-detail.js')).mountDetail(el, Number(args[0]));
 
-  setHeader({
-    title: 'Trades', journal: true,
-    actions: `<button id="import" class="chip accent btn">${icon('Upload', 14)}Import</button>
-              <input id="file" type="file" accept=".html,.htm,text/html" class="hide">`,
-  });
-  const bar = headerActions();
+  setHeader({ title: 'Trades', journal: true });
   let page = appStore.get('tradesPage') ?? 0;   // remembered when you come back from a trade
   const accountId = appStore.get('account').id;
 
@@ -64,50 +58,12 @@ export async function mount(el, { args = [] } = {}) {
       <div class="card empty">
         ${icon('Inbox', 34)}
         <b>No trades in this journal yet</b>
-        <span class="small">Tap Import and choose your MT5 history report (HTML).</span>
+        <span class="small">Import your MT5 history report from Settings.</span>
+        <a class="chip accent btn" href="#/settings" style="text-decoration:none">${icon('Upload', 14)}Go to Settings</a>
       </div>`;
 
     el.querySelector('#prev')?.addEventListener('click', () => { page--; paint(); el.scrollTop = 0; });
     el.querySelector('#next')?.addEventListener('click', () => { page++; paint(); el.scrollTop = 0; });
   }
-
-  async function onFile(e) {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    try {
-      const parsed = parseReport(decodeReport(await file.arrayBuffer()));
-      const accounts = appStore.get('accounts');
-      let target = appStore.get('account');
-      const rid = parsed.account;
-
-      // Route the report to the journal that owns that MT5 account.
-      if (rid) {
-        const match = accounts.find((a) => a.mt5_id === rid);
-        if (match) target = match;
-        else if (!target.mt5_id) {   // first report for this journal: remember its MT5 ID
-          await updateAccount(target.id, { name: target.name, mt5Id: rid, startingBalance: target.starting_balance });
-          await refreshAccounts(target.id);
-        } else if (!confirm(`This report is for MT5 account ${rid}, but "${target.name}" is linked to ${target.mt5_id}.\nImport into "${target.name}" anyway?`)) {
-          return;
-        }
-      }
-      const { added, updated } = await importTrades(parsed, appStore.get('settings'), target.id);
-      page = 0;
-      appStore.set({ tradesPage: 0 });
-      if (target.id !== appStore.get('account').id) {
-        toast(`${added} new, ${updated} updated in "${target.name}"`);
-        return selectAccount(target.id);        // switches the journal and re-renders
-      }
-      toast(`${added} new, ${updated} updated`);
-    } catch (err) {
-      console.error(err);
-      toast(err.message.length > 110 ? err.message.slice(0, 107) + '…' : err.message);
-    }
-    paint();
-  }
-
-  bar.querySelector('#import').onclick = () => bar.querySelector('#file').click();
-  bar.querySelector('#file').onchange = onFile;
   await paint();
 }

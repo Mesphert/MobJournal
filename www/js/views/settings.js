@@ -1,7 +1,8 @@
 import { appStore } from '../store.js';
 import { systemTimeZone } from '../time.js';
-import { saveSetting, recomputeDerived } from '../data.js';
-import { applyTheme, toast, esc } from '../ui.js';
+import { saveSetting, recomputeDerived, countTrades } from '../data.js';
+import { chooseAndImport } from '../importer.js';
+import { applyTheme, toast, esc, selectHtml, updateSelect } from '../ui.js';
 import { icon } from '../icons.js';
 
 const THEMES = [
@@ -36,7 +37,26 @@ export async function mount(el, { args = [] } = {}) {
   const s = appStore.get('settings');
   const sys = systemTimeZone();
 
+  const account = appStore.get('account');
+  const tzOptions = [{ value: '', label: `System default (${sys})` }, ...zones().map((z) => ({ value: z, label: z }))];
+  const modeOptions = [
+    { value: 'ny_close', label: 'New York close (GMT+2 winter / GMT+3 summer)' },
+    { value: 'fixed', label: 'Fixed UTC offset (no DST)' },
+  ];
+  const tradeCount = await countTrades(account.id);
+
   el.innerHTML = `
+    <section class="card stack">
+      <h2 style="margin-bottom:0">${icon('Upload', 18)}Import trades</h2>
+      <div class="row wrap" style="gap:5px">
+        <span class="chip info">${icon('BookOpen', 11)}${esc(account.name)}</span>
+        <span class="chip">${tradeCount} trades</span>
+        ${account.mt5_id ? `<span class="chip">${icon('Hash', 11)}${esc(account.mt5_id)}</span>` : ''}
+      </div>
+      <button class="chip accent btn" id="doImport" style="justify-content:center;height:38px">${icon('Upload', 14)}Import MT5 history (HTML)</button>
+      <span class="hint">MT5 desktop: History tab, right-click, Report, HTML. The report goes to the journal with the same MT5 account ID. Importing the same file again is safe.</span>
+    </section>
+
     <a class="card row between" href="#/settings/journals">
       <span class="row">
         ${icon('BookOpen', 20)}
@@ -62,18 +82,12 @@ export async function mount(el, { args = [] } = {}) {
 
     <section class="card">
       <h2>${icon('Globe', 18)}Timezone</h2>
-      <select class="field" id="tz" style="margin-top:0">
-        <option value="">System default (${esc(sys)})</option>
-        ${zones().map((z) => `<option value="${z}" ${s.timezone === z ? 'selected' : ''}>${z}</option>`).join('')}
-      </select>
+      ${selectHtml({ attrs: 'id="tz"', value: s.timezone, options: tzOptions, title: 'Timezone' })}
     </section>
 
     <section class="card stack">
       <h2 style="margin-bottom:0">${icon('Clock', 18)}MT5 server time</h2>
-      <select class="field" id="brokerMode">
-        <option value="ny_close" ${s.broker_time_mode === 'ny_close' ? 'selected' : ''}>New York close (GMT+2 winter / GMT+3 summer)</option>
-        <option value="fixed" ${s.broker_time_mode === 'fixed' ? 'selected' : ''}>Fixed UTC offset (no DST)</option>
-      </select>
+      ${selectHtml({ attrs: 'id="brokerMode"', value: s.broker_time_mode, options: modeOptions, title: 'MT5 server time' })}
       <div id="offsetWrap" class="${s.broker_time_mode === 'fixed' ? '' : 'hide'}">${num('UTC offset (hours)', 'broker_utc_offset', s)}</div>
       <span class="hint">Converts the report's times to real time. Changing it re-calculates all trades.</span>
     </section>
@@ -102,6 +116,7 @@ export async function mount(el, { args = [] } = {}) {
     } else toast('Saved');
   };
 
+  el.querySelector('#doImport').onclick = async () => { await chooseAndImport(account.id); };
   el.querySelector('#themeSeg').addEventListener('click', async (e) => {
     const b = e.target.closest('button');
     if (!b) return;

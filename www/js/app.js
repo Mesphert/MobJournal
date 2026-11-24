@@ -2,8 +2,8 @@ import { openDb } from './db.js';
 import { appStore } from './store.js';
 import { systemTimeZone } from './time.js';
 import { seedDefaults, loadSettings, adoptLegacyTrades } from './data.js';
-import { applyTheme, watchSystemTheme, renderNav, setHeader } from './ui.js';
-import { refreshAccounts, selectAccount, openSwitcher, mountOnboarding } from './accounts.js';
+import { applyTheme, watchSystemTheme, renderNav, setHeader, resetSelects, installSelects } from './ui.js';
+import { refreshAccounts, selectAccount, openSwitcher, mountOnboarding, promptImport } from './accounts.js';
 
 // Each view exports mount(el, { args }) -> optional cleanup fn
 const ROUTES = {
@@ -31,12 +31,13 @@ async function render() {
   const view = old.cloneNode(false);   // fresh container: no listeners left over from the previous screen
   old.replaceWith(view);
   if (cleanup) { try { cleanup(); } catch (e) { console.error(e); } cleanup = null; }
+  resetSelects();
 
   const nav = document.getElementById('nav');
   if (!appStore.get('account')) {      // no journal yet: onboarding instead of the app
     nav.classList.add('hide');
     setHeader({ title: 'Welcome' });
-    mountOnboarding(view, async (id) => { await selectAccount(id); location.hash = '#/trades'; });
+    mountOnboarding(view, async (id) => { await selectAccount(id); location.hash = '#/trades'; promptImport(id); });
     return;
   }
   nav.classList.remove('hide');
@@ -58,6 +59,7 @@ async function boot() {
     await refreshAccounts();
     applyTheme(settings.theme);
     watchSystemTheme(() => appStore.get('settings').theme);
+    installSelects();
     window.addEventListener('hashchange', render);
     window.addEventListener('accountchange', render);
     window.addEventListener('openjournals', openSwitcher);

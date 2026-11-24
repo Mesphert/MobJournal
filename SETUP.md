@@ -23,5 +23,5 @@ The signing key is fixed, so each new APK installs over the old one and keeps yo
 Each trading account is a journal (name, optional MT5 account ID, starting balance). Switch from the header on Trades and Dashboard; manage in Settings > Journals. Importing a report sends it to the journal whose MT5 ID matches.
 
 ## Import
-MT5 desktop > History tab > right-click > Report > HTML. Pick that file with Import.
+MT5 desktop > History tab > right-click > Report > HTML. In the app: Settings > Import MT5 history. (A prompt also appears right after you create a journal.)
 Re-importing is safe: trades are matched by ticket.

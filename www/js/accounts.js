@@ -60,6 +60,7 @@ export function openJournalForm(existing = null, onDone = () => {}) {
       if (existing) await updateAccount(existing.id, data); else id = await createAccount(data);
       close();
       await onDone(id);
+      if (!existing) promptImport(id);      // new journal: remind the user to import their MT5 history
     } catch (err) { toast(err.message); }
   };
 }
@@ -118,4 +119,9 @@ export async function removeJournal(account, removeFile) {
   await deleteAccount(account.id);
   await refreshAccounts();
   changed();
+}
+
+/** Lazy wrapper (importer.js imports this file, so the reverse import happens at call time). */
+export async function promptImport(id) {
+  (await import('./importer.js')).promptImport(id);
 }

@@ -33,3 +33,8 @@ export function rangeState(range, now = Date.now()) {
 export function rangesAt(ranges, ts) {
   return ranges.filter((r) => rangeState(r, ts).active);
 }
+
+/** Occurrences of a range that overlap [from, to] (UTC ms). Works for windows up to a few days. */
+export function overlapping(range, from, to) {
+  return occurrences(range, from).filter((o) => o.start < to && o.end > from);
+}

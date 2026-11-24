@@ -70,15 +70,16 @@ export function symbolIconName(sym = '') {
 // ---------- header ----------
 /**
  * Title bar. back = '#/route' shows a back arrow. actions = html on the right.
- * journal = true shows the current journal under the title; tapping it opens the journal switcher.
+ * journal = true puts the current journal pill on the right; tapping it opens the journal switcher.
  */
 export function setHeader({ title = '', back = null, actions = '', journal = false } = {}) {
   const acct = appStore.get('account');
+  const pill = journal && acct
+    ? `<button class="hdr-acct" id="hdr-acct" aria-label="Switch journal"><i class="dot"></i><span class="nm">${esc(acct.name)}</span>${icon('ChevronDown', 14)}</button>` : '';
   document.getElementById('hdr').innerHTML =
     (back ? `<a class="hdr-back" href="${back}" aria-label="Back">${icon('ArrowLeft', 22)}</a>` : '') +
-    `<div class="hdr-main"><h1 class="hdr-title">${esc(title)}</h1>` +
-    (journal && acct ? `<button class="hdr-acct" id="hdr-acct" aria-label="Switch journal"><i class="dot"></i><span class="nm">${esc(acct.name)}</span>${icon('ChevronDown', 13)}</button>` : '') +
-    `</div><div class="hdr-actions" id="hdr-actions">${actions}</div>`;
+    `<div class="hdr-main"><h1 class="hdr-title">${esc(title)}</h1></div>` +
+    `<div class="hdr-actions" id="hdr-actions">${actions}${pill}</div>`;
   document.getElementById('hdr-acct')?.addEventListener('click', () => window.dispatchEvent(new Event('openjournals')));
 }
 export const headerActions = () => document.getElementById('hdr-actions');
@@ -116,4 +117,70 @@ export function flag(code) {
   const c = CURRENCY_COUNTRY[raw] ?? raw;
   if (!/^[A-Z]{2}$/.test(c)) return '🌐';
   return String.fromCodePoint(...[...c].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65));
+}
+
+// ---------- custom dropdown (never the system <select>) ----------
+const SELECTS = new Map();
+let selSeq = 0;
+export const resetSelects = () => SELECTS.clear();           // called on every route change
+const labelOf = (options, value, ph) => options.find((o) => o.value === value)?.label ?? (value || ph);
+
+/**
+ * Returns the button markup for a dropdown. Options: [{ value, label }].
+ * The button behaves like a select: it has .value and fires a bubbling 'change' event when the user picks something.
+ * clearable adds a "None" row that sets the value to ''.
+ */
+export function selectHtml({ f = '', value = '', options = [], placeholder = '—', title = '', clearable = false, attrs = '' } = {}) {
+  const id = 's' + (++selSeq);
+  SELECTS.set(id, { options, placeholder, title, clearable });
+  return `<button type="button" class="sel" data-sel="${id}" ${f ? `data-f="${f}"` : ''} value="${esc(value)}" ${attrs}>` +
+    `<span class="sel-v ${value ? '' : 'ph'}">${esc(labelOf(options, value, placeholder))}</span>${icon('ChevronDown', 16)}</button>`;
+}
+export const selectOptions = (btn) => SELECTS.get(btn.dataset.sel)?.options ?? [];
+
+function paintSelect(btn) {
+  const c = SELECTS.get(btn.dataset.sel);
+  const span = btn.querySelector('.sel-v');
+  span.textContent = labelOf(c.options, btn.value, c.placeholder);
+  span.classList.toggle('ph', !btn.value);
+}
+/** Replace the options (and optionally the value) of an existing dropdown without re-rendering the page. */
+export function updateSelect(btn, { options, value } = {}) {
+  const c = SELECTS.get(btn.dataset.sel);
+  if (!c) return;
+  if (options) c.options = options;
+  if (value !== undefined) btn.value = value;
+  paintSelect(btn);
+}
+
+function openSelect(btn) {
+  const c = SELECTS.get(btn.dataset.sel);
+  if (!c) return;
+  const rows = (q = '') => {
+    const needle = q.trim().toLowerCase();
+    const list = c.options.filter((o) => !needle || String(o.label).toLowerCase().includes(needle));
+    const none = c.clearable && !needle ? `<button class="opt none ${btn.value === '' ? 'on' : ''}" data-v="">None</button>` : '';
+    return none + list.map((o) => `<button class="opt ${o.value === btn.value ? 'on' : ''}" data-v="${esc(o.value)}"><span>${esc(o.label)}</span>${o.value === btn.value ? icon('Check', 18) : ''}</button>`).join('')
+      || '<div class="hint center" style="padding:16px">No matches</div>';
+  };
+  const { el, close } = openSheet(`
+    ${c.title ? `<h2>${esc(c.title)}</h2>` : ''}
+    ${c.options.length > 10 ? '<div class="search"><input class="field" id="selq" placeholder="Search" autocomplete="off"></div>' : ''}
+    <div class="opts" id="selopts">${rows()}</div>`);
+  el.querySelector('#selq')?.addEventListener('input', (e) => { el.querySelector('#selopts').innerHTML = rows(e.target.value); });
+  el.querySelector('#selopts').addEventListener('click', (e) => {
+    const o = e.target.closest('[data-v]');
+    if (!o) return;
+    btn.value = o.dataset.v;
+    paintSelect(btn);
+    close();
+    btn.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+/** Call once at start-up. */
+export function installSelects() {
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('button.sel');
+    if (btn && !btn.disabled) openSelect(btn);
+  });
 }
